@@ -1,0 +1,32 @@
+#version 330 core
+	uniform float offset, time;
+		
+	float calculoX, colourBlue;
+
+	out vec3 vertexColor, vertexPosition;
+
+// Input vertex data, different for all executions of this shader.
+layout(location = 0) in vec3 vertexPosition_modelspace;
+
+void main(){
+	calculoX = abs(sin(time)) * offset;
+	
+	if(vertexPosition_modelspace.y <= 0) {
+		if(vertexPosition_modelspace.x <= 0){
+			gl_Position.x = vertexPosition_modelspace.x - calculoX;
+		} else {
+			gl_Position.x = vertexPosition_modelspace.x + calculoX;
+		}
+	} else {
+		gl_Position.x = vertexPosition_modelspace.x;
+	}
+
+	gl_Position.yz = vertexPosition_modelspace.yz;
+    gl_Position.w = 1.0;
+
+    colourBlue = (vertexPosition_modelspace.y - (-0.5))/(0.5-(-0.5));
+	
+    vertexColor = vec3(0.0, 1.0, colourBlue);
+    vertexPosition = gl_Position.xyz;
+}
+
