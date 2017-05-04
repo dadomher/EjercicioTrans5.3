@@ -6,10 +6,12 @@
 #include <iostream>
 #include <cmath>
 #include <SOIL.h>
-#include <shaderPractica.hpp>
+#include "shaderPractica.hpp"
 #include <glm.hpp>
 #include <gtc/matrix_transform.hpp>
 #include <gtc/type_ptr.hpp>
+#include "Camera.h";
+#include "Model.h"
 
 using namespace std;
 using namespace glm;
@@ -28,16 +30,20 @@ float borderColor[] = { 1.0f, 1.0f, 0.0f, 1.0f };
 float xRot = 0.0f, yRot = 0.0f;
 //
 GLfloat fov = 45.0f;
+
+Camera c1;
+Model m1;
 //variables donde calculamos y almacenamos los valores de posicion, direccion de la camara
-vec3 cPos, cUp, cFront;
+
+vec3 cPos = glm::vec3(0.0f, 0.0f, 3.0f);
+vec3 cFront = vec3(0.0f, 0.0f, -1.0f);
+vec3 cUp = glm::vec3(0.0f, 1.0f, 0.0f);
+
 // velocidad de la posicion de la camara
 GLfloat cSpeed = 0.01f; 
-
-GLfloat vYaw = -90.0f;	//usamos este valor para que el angulo yaw centre la camara en los objectos
-GLfloat vPitch = 0.0f;
+GLfloat sensivity = 0.5f;
 
 int main();
-void DoMovement(GLFWwindow* window);
 void mouse_callback(GLFWwindow* window, double xpos, double ypos);
 void key_callback(GLFWwindow* window, int key, int scancode, int action, int mode);
 void pintar_vao(GLuint VAO);
@@ -239,9 +245,7 @@ int main() {
 	glBindVertexArray(0);
 
 	//CAMARA
-	cPos = glm::vec3(0.0f, 0.0f, 3.0f);
-	cFront = glm::vec3(0.0f, 0.0f, -1.0f);
-	cUp = glm::vec3(0.0f, 1.0f, 0.0f);
+	c1 = Camera(cPos, cFront, sensivity, fov);
 
 	//Matriz de proyeccion
 	mat4 proj;
@@ -252,10 +256,13 @@ int main() {
 	//Matriz del view de la camara
 	mat4 view;
 
+	m1 = Model("./models/spider/spider.obj");
+	//m1.loadModel("./models/spider/spider.obj");
+
 	//bucle de dibujado
 	while (!glfwWindowShouldClose(window)) {
 		// Check if any events have been activiated (key pressed, mouse moved etc.) and call corresponding response functions
-		DoMovement(window);
+		c1.DoMovement(window);
 
 		//z Buffer
 		glEnable(GL_DEPTH_TEST);
@@ -275,27 +282,28 @@ int main() {
 		sh.USE();
 
 		//
-		proj = perspective(radians(fov), 800.0f / 600.0f, 1.0f, 100.0f);
 
 		//calculamos a cada iteracion el view de la camara para aplicar a cada una de estas el valor de la posicion
-		view = glm::lookAt(cPos, cPos + cFront, cUp);
+		proj = perspective(radians(c1.GetFOV()), 800.0f / 600.0f, 1.0f, 100.0f);
+		model = GenerateModelMatrix(vec3(0.25f), vec3(0.0f), vec3(0.0f));
 
 		//valor de la transparencia, proyeccion y el view de la camara qude le pasamos al shader
 		glUniform1f(glGetUniformLocation(sh.Program, "trans"), transformacion);
-		glUniformMatrix4fv(glGetUniformLocation(sh.Program, "view"), 1, GL_FALSE, value_ptr(view));
+		glUniformMatrix4fv(glGetUniformLocation(sh.Program, "view"), 1, GL_FALSE, value_ptr(c1.LookAt()));
 		glUniformMatrix4fv(glGetUniformLocation(sh.Program, "proj"), 1, GL_FALSE, value_ptr(proj));
+		glUniformMatrix4fv(glGetUniformLocation(sh.Program, "final"), 1, GL_FALSE, glm::value_ptr(model));
+		m1.Draw(sh, GL_FILL);
 
-		//PRIMER CUBO
-		model = GenerateModelMatrix(vec3(xRot, yRot, 0.0f), vec3(1.0f), CubesPositionBuffer[0]);
+		/*model = GenerateModelMatrix(vec3(xRot, yRot, 0.0f), vec3(1.0f), CubesPositionBuffer[0]);
 		glUniformMatrix4fv(glGetUniformLocation(sh.Program, "final"), 1, GL_FALSE, glm::value_ptr(model));
 		pintar_vao(VAO);
 
-		//RESTO DE CUBOS
+
 		for (int i = 1; i < 10; i++) {
 			model = GenerateModelMatrix(vec3(glfwGetTime() * 100, glfwGetTime() * 100, 0.0f), vec3(1.0f), CubesPositionBuffer[i]);
 			glUniformMatrix4fv(glGetUniformLocation(sh.Program, "final"), 1, GL_FALSE, glm::value_ptr(model));
 			pintar_vao(VAO);
-		}
+		}*/
 
 		//intercambia el framebuffer
 		glfwSwapBuffers(window);
@@ -343,21 +351,6 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
 	//if (key == GLFW_KEY_D && (action == GLFW_PRESS || action == GLFW_REPEAT)) cPos += glm::normalize(cross(cFront, cUp)) * cameraSpeed;
 }
 
-//funcion que actualizaremos la camara segun que tecla apretemos
-void DoMovement(GLFWwindow* window) {
-	//Detectamos el estado 
-	int Status_W = glfwGetKey(window, GLFW_KEY_W);
-	int Status_S = glfwGetKey(window, GLFW_KEY_S);
-	int Status_A = glfwGetKey(window, GLFW_KEY_A);
-	int Status_D = glfwGetKey(window, GLFW_KEY_D);
-
-	//calculamos la posicion de la camara segun el estado que detectamos previamente de las teclas
-	if (Status_W == GLFW_PRESS || Status_W == GLFW_REPEAT) cPos += cSpeed * cFront;
-	else if (Status_S == GLFW_PRESS || Status_S == GLFW_REPEAT) cPos -= cSpeed * cFront;
-	else if (Status_A == GLFW_PRESS || Status_A == GLFW_REPEAT) cPos -= glm::normalize(cross(cFront, cUp)) * cSpeed;
-	else if (Status_D == GLFW_PRESS || Status_D == GLFW_REPEAT) cPos += glm::normalize(cross(cFront, cUp)) * cSpeed;
-}
-
 void pintar_vao(GLuint VAO) {
 	//pitar el VAO
 	glBindVertexArray(VAO);
@@ -393,50 +386,12 @@ mat4 GenerateModelMatrix(vec3 rot, vec3 scal, vec3 cubepositions) {
 	return funcFinalModel;
 }
 
-bool firstMouse = true;
 void mouse_callback(GLFWwindow* window, double xpos, double ypos) {
-	GLfloat lastX = 400, lastY = 300; // para calcular la posicion del primer frame, que sera el centro
-
-	//if para calcular la pos del primer frame
-	if (firstMouse) {
-		lastX = xpos;
-		lastY = ypos;
-		firstMouse = false;
-	}
-
-	//calculamos el offset desde el frame anterior al actual
-	GLfloat xoffset = xpos - lastX;
-	GLfloat yoffset = lastY - ypos;
-
-	//actualizamos frame anterior para la siguiente iteracion
-	lastX = xpos;
-	lastY = ypos;
-
-	//multiplicamos el valor de offset para que el movimiento del raton sea mucho mas llevadero
-	GLfloat sensitivity = 0.0001;
-	xoffset *= sensitivity;
-	yoffset *= sensitivity;
-
-	//2 de los 3 angulos que utilizamos en los objetos 3d. Determina el valor de estos angulos.
-	vYaw += xoffset;
-	vPitch += yoffset;
-
-	//limite del angulo que establecemos al pitch
-	if (vPitch > 89.0f) vPitch = 89.0f;
-	if (vPitch < -89.0f) vPitch = -89.0f;
-
-	//calculamos la camara frontal
-	glm::vec3 front;
-	front.x = cos(glm::radians(vYaw)) * cos(glm::radians(vPitch));
-	front.y = sin(glm::radians(vPitch));
-	front.z = sin(glm::radians(vYaw)) * cos(glm::radians(vPitch));
-	cFront = glm::normalize(front);
+	c1.MouseMove(window, xpos, ypos);
 }
-
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
 	//utilizamos el fov para determinar cuanto podemos ver de la escena y establecemos unos limites
-	if (fov >= 1.0f && fov <= 45.0f) fov -= yoffset;
-	if (fov <= 1.0f) fov = 1.0f;
-	if (fov >= 45.0f) fov = 45.0f;
+	c1.MouseScroll(window, yoffset);
 }
+
